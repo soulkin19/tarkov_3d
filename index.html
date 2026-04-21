@@ -2,58 +2,96 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>.sda 高度暗号化ツール（AES-256）</title>
+    <title>.sda 高度暗号化ツール</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; max-width: 800px; }
-        textarea, input { width: 100%; padding: 8px; margin: 5px 0; }
-        button { padding: 12px 20px; margin: 10px 5px; font-size: 16px; }
-        .section { border: 1px solid #ccc; padding: 15px; margin: 15px 0; border-radius: 8px; }
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
+        .tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+        .tab { padding: 15px 25px; cursor: pointer; font-size: 18px; }
+        .tab.active { background: #fff; border: 2px solid #ccc; border-bottom: none; font-weight: bold; }
+        .content { display: none; background: white; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .content.active { display: block; }
+        input, textarea { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+        button { padding: 12px 20px; margin: 10px 5px; font-size: 16px; cursor: pointer; }
+        pre { background: #f4f4f4; padding: 15px; overflow: auto; max-height: 400px; white-space: pre-wrap; word-break: break-all; }
+        .dropzone { border: 3px dashed #aaa; padding: 40px; text-align: center; margin: 15px 0; cursor: pointer; }
+        .dropzone.dragover { background: #e0f0ff; border-color: #0066ff; }
     </style>
 </head>
 <body>
-    <h1>.sda 高度暗号化ツール</h1>
-    <p>タイトルと内容を入力 → パスワードを設定 → 暗号化してダウンロード。<br>
-    復号するには同じページで同じパスワードを入力してください。</p>
+    <h1>.sda 高度暗号化ツール（AES-256）</h1>
 
-    <div class="section">
-        <h2>1. データ作成</h2>
-        <label>タイトル：<br>
-            <input type="text" id="title" value="私の秘密の.sdaデータ">
-        </label><br>
-        <label>内容：<br>
-            <textarea id="content" rows="8">ここに大切なメモやデータを書いてください。\nこの内容は高度に暗号化されます。</textarea>
-        </label>
+    <!-- タブ -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab(0)">暗号化</div>
+        <div class="tab" onclick="switchTab(1)">複合化</div>
+        <div class="tab" onclick="switchTab(2)">ファイル閲覧</div>
     </div>
 
-    <div class="section">
-        <h2>2. 暗号化してダウンロード</h2>
-        <label>暗号化パスワード（忘れないように！）：<br>
-            <input type="password" id="encryptPass" placeholder="強力なパスワードを入力">
-        </label><br>
-        <button onclick="encryptAndDownload()">.sda（暗号化済み）をダウンロード</button>
+    <!-- 暗号化タブ -->
+    <div id="tab0" class="content active">
+        <h2>暗号化してダウンロード</h2>
+        <label>タイトル：<br><input type="text" id="encTitle" value="私の秘密のデータ"></label><br>
+        <label>内容：<br><textarea id="encContent" rows="10">ここに大切な情報を書いてください。この内容は高度に暗号化されます。</textarea></label><br>
+        <label>暗号化パスワード（忘れないで！）：<br><input type="password" id="encPass" placeholder="強力なパスワードを入力"></label><br>
+        <button onclick="encryptAndDownload()">暗号化して .sda をダウンロード</button>
     </div>
 
-    <div class="section">
-        <h2>3. .sdaファイルを復号して表示</h2>
-        <input type="file" id="fileInput" accept=".sda" style="display:none;">
-        <button onclick="document.getElementById('fileInput').click()">.sdaファイルを選択して復号</button><br>
-        <label>復号パスワード：<br>
-            <input type="password" id="decryptPass" placeholder="暗号化時に使ったパスワード">
-        </label><br>
-        <pre id="output" style="background:#f4f4f4; padding:15px; min-height:100px;"></pre>
+    <!-- 複合化タブ -->
+    <div id="tab1" class="content">
+        <h2>複合化（復号）</h2>
+        <div class="dropzone" id="decDrop" onclick="document.getElementById('decFile').click()">
+            .sdaファイルをここにドラッグ＆ドロップ または クリックして選択
+        </div>
+        <input type="file" id="decFile" accept=".sda" style="display:none;">
+        <label>復号パスワード：<br><input type="password" id="decPass" placeholder="暗号化時に使ったパスワード"></label><br>
+        <button onclick="decryptFile()">複合化して内容を表示</button>
+        <pre id="decOutput"></pre>
+    </div>
+
+    <!-- ファイル閲覧タブ（生データ表示） -->
+    <div id="tab2" class="content">
+        <h2>ファイル閲覧（暗号化されたままの生データ）</h2>
+        <div class="dropzone" id="viewDrop" onclick="document.getElementById('viewFile').click()">
+            .sdaファイルをここにドラッグ＆ドロップ または クリックして選択<br>
+            （意味のわからない記号やゴミデータとして表示されます）
+        </div>
+        <input type="file" id="viewFile" accept=".sda" style="display:none;">
+        <pre id="viewOutput"></pre>
     </div>
 
     <script>
-        // Web Crypto APIを使ってAES-256-GCMで高度暗号化
-        async function encryptAndDownload() {
-            const title = document.getElementById("title").value || "無題";
-            const content = document.getElementById("content").value;
-            const password = document.getElementById("encryptPass").value;
+        // タブ切り替え
+        function switchTab(n) {
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === n));
+            document.querySelectorAll('.content').forEach((c, i) => c.classList.toggle('active', i === n));
+        }
 
-            if (!password) {
-                alert("パスワードを入力してください！");
-                return;
-            }
+        // ドラッグ&ドロップ対応
+        function setupDropzone(dropId, fileId) {
+            const drop = document.getElementById(dropId);
+            drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+            drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+            drop.addEventListener('drop', e => {
+                e.preventDefault();
+                drop.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file && file.name.endsWith('.sda')) {
+                    document.getElementById(fileId).files = e.dataTransfer.files;
+                    if (dropId === 'viewDrop') viewRawFile(file);
+                    else if (dropId === 'decDrop') {} // 複合化はボタンで実行
+                }
+            });
+        }
+        setupDropzone('decDrop', 'decFile');
+        setupDropzone('viewDrop', 'viewFile');
+
+        // 暗号化してダウンロード
+        async function encryptAndDownload() {
+            const title = document.getElementById("encTitle").value || "無題";
+            const content = document.getElementById("encContent").value;
+            const password = document.getElementById("encPass").value;
+
+            if (!password) return alert("パスワードを入力してください！");
 
             const data = {
                 magic: "SDA_SECURE_FORMAT_v1.0",
@@ -68,26 +106,19 @@
             const encoder = new TextEncoder();
             const dataBytes = encoder.encode(jsonString);
 
-            // パスワードから鍵を派生（PBKDF2 + ソルト）
             const salt = crypto.getRandomValues(new Uint8Array(16));
             const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits", "deriveKey"]);
             const key = await crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                { name: "PBKDF2", salt, iterations: 600000, hash: "SHA-256" },
                 keyMaterial,
                 { name: "AES-GCM", length: 256 },
                 false,
                 ["encrypt"]
             );
 
-            // 暗号化（IV = 初期化ベクトル）
             const iv = crypto.getRandomValues(new Uint8Array(12));
-            const encrypted = await crypto.subtle.encrypt(
-                { name: "AES-GCM", iv: iv },
-                key,
-                dataBytes
-            );
+            const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, dataBytes);
 
-            // ファイル形式： [salt(16) + iv(12) + encryptedData]
             const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
             combined.set(salt, 0);
             combined.set(iv, salt.length);
@@ -99,24 +130,22 @@
             link.download = "mydata.sda";
             link.click();
 
-            alert("mydata.sda（高度暗号化済み）をダウンロードしました！\nこのファイルはパスワードなしでは内容がわかりません。");
+            alert("暗号化済みの mydata.sda をダウンロードしました！");
         }
 
-        // 復号機能
-        document.getElementById("fileInput").addEventListener("change", async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+        // 複合化（復号）
+        async function decryptFile() {
+            const fileInput = document.getElementById("decFile");
+            const file = fileInput.files[0];
+            const password = document.getElementById("decPass").value;
+            const output = document.getElementById("decOutput");
 
-            const password = document.getElementById("decryptPass").value;
-            if (!password) {
-                alert("復号パスワードを入力してください！");
-                return;
-            }
+            if (!file || !password) return alert("ファイルとパスワードを入力してください！");
 
             const reader = new FileReader();
-            reader.onload = async function(event) {
+            reader.onload = async function(e) {
                 try {
-                    const combined = new Uint8Array(event.target.result);
+                    const combined = new Uint8Array(e.target.result);
                     const salt = combined.slice(0, 16);
                     const iv = combined.slice(16, 28);
                     const encrypted = combined.slice(28);
@@ -124,36 +153,45 @@
                     const encoder = new TextEncoder();
                     const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits", "deriveKey"]);
                     const key = await crypto.subtle.deriveKey(
-                        { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                        { name: "PBKDF2", salt, iterations: 600000, hash: "SHA-256" },
                         keyMaterial,
                         { name: "AES-GCM", length: 256 },
                         false,
                         ["decrypt"]
                     );
 
-                    const decrypted = await crypto.subtle.decrypt(
-                        { name: "AES-GCM", iv: iv },
-                        key,
-                        encrypted
-                    );
-
+                    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
                     const decoder = new TextDecoder();
                     const jsonString = decoder.decode(decrypted);
                     const data = JSON.parse(jsonString);
 
-                    if (data.magic !== "SDA_SECURE_FORMAT_v1.0") {
-                        throw new Error("不正なフォーマット");
-                    }
-
-                    document.getElementById("output").textContent = 
-                        `タイトル: ${data.title}\n\n` +
-                        `作成日時: ${data.created}\n\n` +
-                        `内容:\n${data.content}`;
+                    output.textContent = `タイトル: ${data.title}\n作成日時: ${data.created}\n\n内容:\n${data.content}`;
                 } catch (err) {
-                    document.getElementById("output").textContent = "復号に失敗しました。\nパスワードが間違っているか、ファイルが破損しています。";
+                    output.textContent = "復号失敗：パスワードが間違っているか、ファイルが破損しています。";
                 }
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        // ファイル閲覧（生データ表示）
+        function viewRawFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const bytes = new Uint8Array(e.target.result);
+                let hex = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    hex += bytes[i].toString(16).padStart(2, '0') + ' ';
+                    if ((i + 1) % 32 === 0) hex += '\n';
+                }
+                document.getElementById("viewOutput").textContent = 
+                    `ファイル名: ${file.name}\nサイズ: ${file.size} バイト\n\n=== 暗号化された生データ（16進数表示） ===\n${hex}`;
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // ファイル選択時の自動処理
+        document.getElementById("viewFile").addEventListener("change", e => {
+            if (e.target.files[0]) viewRawFile(e.target.files[0]);
         });
     </script>
 </body>
