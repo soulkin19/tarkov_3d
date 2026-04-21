@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>.sda 高度暗号化ツール</title>
+    <title>.sda暗号化ツール</title>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; }
         .tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 20px; }
@@ -18,7 +18,7 @@
     </style>
 </head>
 <body>
-    <h1>.sda 高度暗号化ツール（AES-256）</h1>
+    <h1>.sda 高度暗号化ツール</h1>
 
     <!-- タブ -->
     <div class="tabs">
@@ -30,9 +30,9 @@
     <!-- 暗号化タブ -->
     <div id="tab0" class="content active">
         <h2>暗号化してダウンロード</h2>
-        <label>タイトル：<br><input type="text" id="encTitle" value="私の秘密のデータ"></label><br>
-        <label>内容：<br><textarea id="encContent" rows="10">ここに大切な情報を書いてください。この内容は高度に暗号化されます。</textarea></label><br>
-        <label>暗号化パスワード（忘れないで！）：<br><input type="password" id="encPass" placeholder="強力なパスワードを入力"></label><br>
+        <label>タイトル：<br><input type="text" id="encTitle" value="data"></label><br>
+        <label>内容：<br><textarea id="encContent" rows="10">Welcome to the X</textarea></label><br>
+        <label>暗号化パスワード：<br><input type="password" id="encPass" placeholder="pass"></label><br>
         <button onclick="encryptAndDownload()">暗号化して .sda をダウンロード</button>
     </div>
 
