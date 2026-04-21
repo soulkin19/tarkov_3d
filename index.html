@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>.sda 高度暗号化ツール（AES-256）</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; max-width: 800px; }
+        textarea, input { width: 100%; padding: 8px; margin: 5px 0; }
+        button { padding: 12px 20px; margin: 10px 5px; font-size: 16px; }
+        .section { border: 1px solid #ccc; padding: 15px; margin: 15px 0; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h1>.sda 高度暗号化ツール</h1>
+    <p>タイトルと内容を入力 → パスワードを設定 → 暗号化してダウンロード。<br>
+    復号するには同じページで同じパスワードを入力してください。</p>
+
+    <div class="section">
+        <h2>1. データ作成</h2>
+        <label>タイトル：<br>
+            <input type="text" id="title" value="私の秘密の.sdaデータ">
+        </label><br>
+        <label>内容：<br>
+            <textarea id="content" rows="8">ここに大切なメモやデータを書いてください。\nこの内容は高度に暗号化されます。</textarea>
+        </label>
+    </div>
+
+    <div class="section">
+        <h2>2. 暗号化してダウンロード</h2>
+        <label>暗号化パスワード（忘れないように！）：<br>
+            <input type="password" id="encryptPass" placeholder="強力なパスワードを入力">
+        </label><br>
+        <button onclick="encryptAndDownload()">.sda（暗号化済み）をダウンロード</button>
+    </div>
+
+    <div class="section">
+        <h2>3. .sdaファイルを復号して表示</h2>
+        <input type="file" id="fileInput" accept=".sda" style="display:none;">
+        <button onclick="document.getElementById('fileInput').click()">.sdaファイルを選択して復号</button><br>
+        <label>復号パスワード：<br>
+            <input type="password" id="decryptPass" placeholder="暗号化時に使ったパスワード">
+        </label><br>
+        <pre id="output" style="background:#f4f4f4; padding:15px; min-height:100px;"></pre>
+    </div>
+
+    <script>
+        // Web Crypto APIを使ってAES-256-GCMで高度暗号化
+        async function encryptAndDownload() {
+            const title = document.getElementById("title").value || "無題";
+            const content = document.getElementById("content").value;
+            const password = document.getElementById("encryptPass").value;
+
+            if (!password) {
+                alert("パスワードを入力してください！");
+                return;
+            }
+
+            const data = {
+                magic: "SDA_SECURE_FORMAT_v1.0",
+                format: "sda_original_encrypted",
+                version: "1.0",
+                created: new Date().toISOString(),
+                title: title,
+                content: content
+            };
+
+            const jsonString = JSON.stringify(data);
+            const encoder = new TextEncoder();
+            const dataBytes = encoder.encode(jsonString);
+
+            // パスワードから鍵を派生（PBKDF2 + ソルト）
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits", "deriveKey"]);
+            const key = await crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt"]
+            );
+
+            // 暗号化（IV = 初期化ベクトル）
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encrypted = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                dataBytes
+            );
+
+            // ファイル形式： [salt(16) + iv(12) + encryptedData]
+            const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
+            combined.set(salt, 0);
+            combined.set(iv, salt.length);
+            combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+
+            const blob = new Blob([combined], { type: "application/octet-stream" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "mydata.sda";
+            link.click();
+
+            alert("mydata.sda（高度暗号化済み）をダウンロードしました！\nこのファイルはパスワードなしでは内容がわかりません。");
+        }
+
+        // 復号機能
+        document.getElementById("fileInput").addEventListener("change", async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const password = document.getElementById("decryptPass").value;
+            if (!password) {
+                alert("復号パスワードを入力してください！");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                try {
+                    const combined = new Uint8Array(event.target.result);
+                    const salt = combined.slice(0, 16);
+                    const iv = combined.slice(16, 28);
+                    const encrypted = combined.slice(28);
+
+                    const encoder = new TextEncoder();
+                    const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits", "deriveKey"]);
+                    const key = await crypto.subtle.deriveKey(
+                        { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                        keyMaterial,
+                        { name: "AES-GCM", length: 256 },
+                        false,
+                        ["decrypt"]
+                    );
+
+                    const decrypted = await crypto.subtle.decrypt(
+                        { name: "AES-GCM", iv: iv },
+                        key,
+                        encrypted
+                    );
+
+                    const decoder = new TextDecoder();
+                    const jsonString = decoder.decode(decrypted);
+                    const data = JSON.parse(jsonString);
+
+                    if (data.magic !== "SDA_SECURE_FORMAT_v1.0") {
+                        throw new Error("不正なフォーマット");
+                    }
+
+                    document.getElementById("output").textContent = 
+                        `タイトル: ${data.title}\n\n` +
+                        `作成日時: ${data.created}\n\n` +
+                        `内容:\n${data.content}`;
+                } catch (err) {
+                    document.getElementById("output").textContent = "復号に失敗しました。\nパスワードが間違っているか、ファイルが破損しています。";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    </script>
+</body>
+</html>
