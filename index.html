@@ -3,258 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Achex 3D FPS - Multi Device</title>
+    <title>Achex Pro FPS</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #87ceeb; font-family: 'Helvetica Neue', Arial, sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; }
         
-        /* セレクター画面 */
-        #ui-layer { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.9); z-index: 100; }
-        #setup-box { text-align: center; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 320px; }
-        .screen { display: none; }
-        .active { display: block; }
+        /* UIレイヤー */
+        #ui-layer { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.9); color: white; z-index: 100; }
+        #lobby { text-align: center; background: #222; padding: 30px; border: 2px solid #0f0; }
         
-        h2 { color: #333; margin-bottom: 20px; }
-        input, select, button { display: block; width: 100%; margin: 12px 0; padding: 14px; border-radius: 10px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; }
+        /* 座標表示（左上） */
+        #coords { position: absolute; top: 10px; left: 10px; color: #0f0; font-size: 14px; z-index: 10; pointer-events: none; }
         
-        .device-btn { background: #007bff; color: white; font-weight: bold; border: none; cursor: pointer; margin-bottom: 10px; }
-        .join-btn { background: #28a745; color: white; font-weight: bold; border: none; cursor: pointer; }
+        /* 参加人数（右上） */
+        #info { position: absolute; top: 10px; right: 10px; color: #0f0; text-align: right; z-index: 10; pointer-events: none; }
+        
+        /* HPバー（下中央） */
+        #hp-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 200px; height: 20px; background: #444; border: 2px solid #fff; z-index: 10; }
+        #hp-bar { width: 100%; height: 100%; background: #f00; transition: width 0.2s; }
+        
+        /* モバイル射撃ボタン（右下） */
+        #mobile-fire { 
+            position: absolute; bottom: 40px; right: 40px; width: 80px; height: 80px; 
+            background: rgba(255,0,0,0.5); border: 4px solid #fff; border-radius: 50%; 
+            z-index: 20; display: none; touch-action: none;
+            justify-content: center; align-items: center; color: white; font-weight: bold;
+        }
 
-        /* ゲーム内UI */
-        #playerCount { position: absolute; top: 20px; right: 20px; color: #333; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.7); padding: 5px 15px; border-radius: 20px; display: none; z-index: 10; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(0,0,0,0.5); font-size: 24px; pointer-events: none; display: none; z-index: 10; }
-        
-        /* ジョイスティック用エリア */
-        #joystick-container { position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; z-index: 50; display: none; }
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0f0; font-size: 24px; pointer-events: none; display: none; z-index: 10; }
+        input, button { display: block; width: 100%; margin: 10px 0; padding: 12px; }
     </style>
 </head>
 <body>
 
     <div id="ui-layer">
-        <div id="setup-box">
-            <div id="screen-device" class="screen active">
-                <h2>デバイスを選択</h2>
-                <button class="device-btn" onclick="setDevice('pc')">PC (キーボード & マウス)</button>
-                <button class="device-btn" onclick="setDevice('mobile')">モバイル (ジョイスティック)</button>
-            </div>
-
-            <div id="screen-profile" class="screen">
-                <h2>プロフィール設定</h2>
-                <input type="text" id="playerName" placeholder="名前を入力" maxlength="10">
-                <select id="weaponSelect">
-                    <option value="rifle">RIFLE (RED)</option>
-                    <option value="shotgun">SHOTGUN (BLUE)</option>
-                </select>
-                <button class="join-btn" id="btnJoin">ゲーム開始</button>
-            </div>
+        <div id="lobby">
+            <h2>TERMINAL ACCESS</h2>
+            <input type="text" id="playerName" placeholder="CALL SIGN" maxlength="10">
+            <button id="btnJoin">DEPLOY</button>
         </div>
     </div>
 
-    <div id="playerCount">PLAYERS: 1</div>
-    <div id="crosshair">＋</div>
-    <div id="joystick-container"></div>
+    <div id="coords">X: 0.00 Z: 0.00</div>
+    <div id="info">PLAYERS: 1<br>STATUS: READY</div>
+    <div id="hp-container"><div id="hp-bar"></div></div>
+    <div id="crosshair">+</div>
+    <div id="mobile-fire">FIRE</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        const HUB_NAME = "Achex_MultiFPS_Stage_V3"; 
+        const HUB_NAME = "Achex_Pro_FPS_v1";
         const WS_URL = "wss://achex.ca:4001";
         
-        let scene, camera, renderer, socket;
+        let scene, camera, renderer, socket, raycaster;
         let myId = Math.random().toString(36).substring(7);
         let players = {}; 
         let moveState = { w: false, s: false, a: false, d: false };
         let isGameStarted = false;
-        let deviceType = 'pc';
-        let myData = { name: "", weapon: "", pos: {x: 0, z: 20}, rot: 0 };
-        
-        // ジョイスティックデータ
-        let joystickInput = { x: 0, y: 0 };
-        let touchStartPos = { x: 0, y: 0 };
+        let myHP = 100;
+        let myData = { pos: {x: 0, z: 20}, rot: 0 };
 
-        // --- デバイス選択処理 ---
-        window.setDevice = (type) => {
-            deviceType = type;
-            document.getElementById('screen-device').classList.remove('active');
-            document.getElementById('screen-profile').classList.add('active');
-        };
-
-        // --- シーン構築 ---
-        function setupScene() {
+        // --- 初期化 ---
+        function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87ceeb); // 明るい空色
-            scene.fog = new THREE.Fog(0x87ceeb, 20, 100);
+            scene.background = new THREE.Color(0x020202);
+            scene.fog = new THREE.Fog(0x020202, 15, 60);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.6, 20);
+            raycaster = new THREE.Raycaster();
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            // 明るい照明
-            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambient);
-            const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-            sun.position.set(50, 100, 50);
+            const sun = new THREE.DirectionalLight(0x00ff00, 0.5);
+            sun.position.set(5, 10, 5);
             scene.add(sun);
 
             createMap();
             animate();
+            
+            // モバイル判定
+            if ('ontouchstart' in window) {
+                document.getElementById('mobile-fire').style.display = 'flex';
+            }
         }
 
         function createMap() {
-            // 床
-            const floor = new THREE.Mesh(
-                new THREE.PlaneGeometry(200, 200),
-                new THREE.MeshStandardMaterial({ color: 0xeeeeee })
-            );
-            floor.rotation.x = -Math.PI / 2;
-            scene.add(floor);
-
-            const grid = new THREE.GridHelper(200, 40, 0xaaaaaa, 0xcccccc);
+            const grid = new THREE.GridHelper(100, 50, 0x00ff00, 0x222222);
             scene.add(grid);
 
-            // 障害物
-            for(let i=0; i<20; i++) {
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x111111, wireframe: false });
+            for(let i=0; i<12; i++) {
                 const h = 2 + Math.random() * 5;
-                const box = new THREE.Mesh(
-                    new THREE.BoxGeometry(4, h, 4),
-                    new THREE.MeshStandardMaterial({ color: 0xdddddd })
-                );
-                box.position.set(Math.random()*160-80, h/2, Math.random()*160-80);
+                const box = new THREE.Mesh(new THREE.BoxGeometry(4, h, 4), wallMat);
+                box.position.set(Math.random()*60-30, h/2, Math.random()*60-30);
                 scene.add(box);
             }
         }
 
-        // --- ジョイスティック初期化 ---
-        function initMobileControls() {
-            const manager = nipplejs.create({
-                zone: document.getElementById('joystick-container'),
-                mode: 'static',
-                position: { left: '60px', bottom: '60px' },
-                color: 'blue'
-            });
+        // --- 射撃・弾道エフェクト ---
+        function shoot() {
+            if (!isGameStarted || myHP <= 0) return;
 
-            manager.on('move', (evt, data) => {
-                joystickInput.x = data.vector.x;
-                joystickInput.y = data.vector.y;
-            });
+            // 曳光弾（ビジュアル）の開始点と終了点を計算
+            const start = new THREE.Vector3();
+            camera.getWorldPosition(start);
+            start.y -= 0.2; // 銃口の位置っぽく下げる
 
-            manager.on('end', () => {
-                joystickInput.x = 0;
-                joystickInput.y = 0;
-            });
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            const end = start.clone().add(direction.multiplyScalar(50));
 
-            // 右半分での視点操作
-            window.addEventListener('touchstart', (e) => {
-                const touch = e.touches[0];
-                if (touch.clientX > window.innerWidth / 2) {
-                    touchStartPos.x = touch.clientX;
-                    touchStartPos.y = touch.clientY;
+            // レイキャストで当たり判定
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const intersects = raycaster.intersectObjects(Object.values(players).map(p => p.mesh));
+
+            if (intersects.length > 0) {
+                const targetId = intersects[0].object.userData.id;
+                sendNetMessage({ type: "hit", target: targetId, damage: 20 });
+                end.copy(intersects[0].point); // 当たった場所で曳光弾を止める
+            }
+
+            // 自分と他人に曳光弾を表示
+            createTracer(start, end);
+            sendNetMessage({ type: "fire", start: start, end: end });
+        }
+
+        function createTracer(start, end) {
+            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 1 });
+            const points = [start, end];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+
+            // 徐々に消えるアニメーション
+            const interval = setInterval(() => {
+                material.opacity -= 0.1;
+                if (material.opacity <= 0) {
+                    scene.remove(line);
+                    geometry.dispose();
+                    material.dispose();
+                    clearInterval(interval);
                 }
-            });
-
-            window.addEventListener('touchmove', (e) => {
-                const touch = e.touches[0];
-                if (touch.clientX > window.innerWidth / 2) {
-                    const dx = touch.clientX - touchStartPos.x;
-                    camera.rotation.y -= dx * 0.005;
-                    touchStartPos.x = touch.clientX;
-                    touchStartPos.y = touch.clientY;
-                }
-            });
+            }, 30);
         }
 
         // --- ネットワーク ---
-        function connectNetwork() {
+        function connect() {
             socket = new WebSocket(WS_URL);
             socket.onopen = () => socket.send(JSON.stringify({ auth: "public", join: HUB_NAME }));
             socket.onmessage = (e) => {
                 const data = JSON.parse(e.data);
                 if (!data.msg || data.sID === myId) return;
-                if (data.msg.type === "move") updateRemotePlayer(data.sID, data.msg);
+                const m = data.msg;
+
+                if (m.type === "move") updateRemotePlayer(data.sID, m);
+                if (m.type === "fire") createTracer(new THREE.Vector3().copy(m.start), new THREE.Vector3().copy(m.end));
+                if (m.type === "hit" && m.target === myId) takeDamage(m.damage);
             };
+        }
+
+        function sendNetMessage(msg) {
+            if (socket && socket.readyState === 1) {
+                socket.send(JSON.stringify({ to: HUB_NAME, sID: myId, msg: msg }));
+            }
+        }
+
+        function takeDamage(dmg) {
+            myHP -= dmg;
+            document.getElementById('hp-bar').style.width = myHP + "%";
+            if (myHP <= 0) {
+                alert("YOU DIED! RESPAWNING...");
+                myHP = 100;
+                camera.position.set(Math.random()*20-10, 1.6, 20);
+                document.getElementById('hp-bar').style.width = "100%";
+            }
         }
 
         function updateRemotePlayer(id, data) {
             if (!players[id]) {
-                const mat = new THREE.MeshStandardMaterial({ color: data.weapon === "rifle" ? 0xff4444 : 0x4444ff });
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), mat);
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+                mesh.userData.id = id;
                 scene.add(mesh);
-                players[id] = { mesh, lastUpdate: Date.now() };
+                players[id] = { mesh };
             }
             players[id].mesh.position.set(data.pos.x, 1, data.pos.z);
             players[id].mesh.rotation.y = data.rot;
-            players[id].lastUpdate = Date.now();
-            document.getElementById('playerCount').innerText = `PLAYERS: ${Object.keys(players).length + 1}`;
+            document.getElementById('info').innerHTML = `PLAYERS: ${Object.keys(players).length + 1}<br>STATUS: ONLINE`;
         }
 
         // --- ループ ---
         function animate() {
             requestAnimationFrame(animate);
-
-            if (isGameStarted) {
+            if (isGameStarted && myHP > 0) {
                 const speed = 0.15;
-                
-                if (deviceType === 'pc') {
-                    if (moveState.w) { camera.position.x -= Math.sin(camera.rotation.y) * speed; camera.position.z -= Math.cos(camera.rotation.y) * speed; }
-                    if (moveState.s) { camera.position.x += Math.sin(camera.rotation.y) * speed; camera.position.z += Math.cos(camera.rotation.y) * speed; }
-                    if (moveState.a) { camera.position.x -= Math.cos(camera.rotation.y) * speed; camera.position.z += Math.sin(camera.rotation.y) * speed; }
-                    if (moveState.d) { camera.position.x += Math.cos(camera.rotation.y) * speed; camera.position.z -= Math.sin(camera.rotation.y) * speed; }
-                } else {
-                    // モバイル移動 (ジョイスティック)
-                    camera.position.x += (joystickInput.x * Math.cos(camera.rotation.y) - joystickInput.y * Math.sin(camera.rotation.y)) * speed;
-                    camera.position.z += (-joystickInput.x * Math.sin(camera.rotation.y) - joystickInput.y * Math.cos(camera.rotation.y)) * speed;
-                }
+                if (moveState.w) { camera.position.x -= Math.sin(camera.rotation.y) * speed; camera.position.z -= Math.cos(camera.rotation.y) * speed; }
+                if (moveState.s) { camera.position.x += Math.sin(camera.rotation.y) * speed; camera.position.z += Math.cos(camera.rotation.y) * speed; }
+                if (moveState.a) { camera.position.x -= Math.cos(camera.rotation.y) * speed; camera.position.z += Math.sin(camera.rotation.y) * speed; }
+                if (moveState.d) { camera.position.x += Math.cos(camera.rotation.y) * speed; camera.position.z -= Math.sin(camera.rotation.y) * speed; }
 
-                // 送信
-                if (socket && socket.readyState === 1) {
-                    socket.send(JSON.stringify({
-                        to: HUB_NAME, sID: myId,
-                        msg: { type: "move", pos: { x: camera.position.x, z: camera.position.z }, rot: camera.rotation.y, weapon: myData.weapon }
-                    }));
-                }
+                document.getElementById('coords').innerText = `X: ${camera.position.x.toFixed(2)} Z: ${camera.position.z.toFixed(2)}`;
+                
+                sendNetMessage({ type: "move", pos: { x: camera.position.x, z: camera.position.z }, rot: camera.rotation.y });
             }
-            renderer.render(scene, camera);
+            if (renderer) renderer.render(scene, camera);
         }
 
-        // 開始ボタン
+        // --- イベント ---
         document.getElementById('btnJoin').onclick = () => {
-            myData.weapon = document.getElementById('weaponSelect').value;
-            myData.name = document.getElementById('playerName').value || "User";
-            
             document.getElementById('ui-layer').style.display = 'none';
-            document.getElementById('playerCount').style.display = 'block';
             document.getElementById('crosshair').style.display = 'block';
-            
-            if (deviceType === 'pc') {
-                document.body.requestPointerLock();
-            } else {
-                document.getElementById('joystick-container').style.display = 'block';
-                initMobileControls();
-            }
-            
+            if (!('ontouchstart' in window)) document.body.requestPointerLock();
             isGameStarted = true;
-            connectNetwork();
+            connect();
         };
 
         window.addEventListener('keydown', (e) => { moveState[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', (e) => { moveState[e.key.toLowerCase()] = false; });
+        window.addEventListener('mousedown', (e) => { if(document.pointerLockElement) shoot(); });
+        document.getElementById('mobile-fire').addEventListener('touchstart', (e) => { e.preventDefault(); shoot(); });
+
         window.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement) camera.rotation.y -= e.movementX * 0.002;
+            if (document.pointerLockElement) {
+                camera.rotation.y -= e.movementX * 0.003;
+                camera.rotation.x = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, camera.rotation.x - e.movementY * 0.003));
+            }
         });
 
-        setupScene();
+        init();
     </script>
 </body>
 </html>
