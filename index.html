@@ -3,160 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Achex Pro FPS</title>
+    <title>Achex 3D FPS - Pro Mobile</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; }
-        
-        /* UIレイヤー */
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; user-select: none; }
         #ui-layer { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.9); color: white; z-index: 100; }
-        #lobby { text-align: center; background: #222; padding: 30px; border: 2px solid #0f0; }
+        #lobby { text-align: center; background: #222; padding: 30px; border-radius: 15px; border: 1px solid #444; }
+        input, select, button { display: block; width: 100%; margin: 10px 0; padding: 12px; border-radius: 5px; box-sizing: border-box; }
         
-        /* 座標表示（左上） */
-        #coords { position: absolute; top: 10px; left: 10px; color: #0f0; font-size: 14px; z-index: 10; pointer-events: none; }
-        
-        /* 参加人数（右上） */
-        #info { position: absolute; top: 10px; right: 10px; color: #0f0; text-align: right; z-index: 10; pointer-events: none; }
-        
-        /* HPバー（下中央） */
-        #hp-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 200px; height: 20px; background: #444; border: 2px solid #fff; z-index: 10; }
+        /* ステータスUI */
+        #top-ui { position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace; pointer-events: none; z-index: 10; }
+        #playerCount { position: absolute; top: 10px; right: 10px; color: #0f0; font-size: 18px; z-index: 10; font-family: monospace; }
+        #hp-container { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 200px; height: 20px; border: 2px solid #fff; background: #333; z-index: 10; display: none; }
         #hp-bar { width: 100%; height: 100%; background: #f00; transition: width 0.2s; }
         
-        /* モバイル射撃ボタン（右下） */
-        #mobile-fire { 
+        /* 操作系 */
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; pointer-events: none; display: none; z-index: 10; }
+        #shootBtn { 
             position: absolute; bottom: 40px; right: 40px; width: 80px; height: 80px; 
-            background: rgba(255,0,0,0.5); border: 4px solid #fff; border-radius: 50%; 
-            z-index: 20; display: none; touch-action: none;
-            justify-content: center; align-items: center; color: white; font-weight: bold;
+            background: rgba(255, 0, 0, 0.5); border: 3px solid #fff; border-radius: 50%; 
+            color: white; font-weight: bold; display: none; z-index: 11; touch-action: manipulation;
         }
-
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0f0; font-size: 24px; pointer-events: none; display: none; z-index: 10; }
-        input, button { display: block; width: 100%; margin: 10px 0; padding: 12px; }
     </style>
 </head>
 <body>
 
     <div id="ui-layer">
         <div id="lobby">
-            <h2>TERMINAL ACCESS</h2>
-            <input type="text" id="playerName" placeholder="CALL SIGN" maxlength="10">
-            <button id="btnJoin">DEPLOY</button>
+            <h2>FPS ARENA</h2>
+            <input type="text" id="playerName" placeholder="名前を入力" maxlength="10">
+            <select id="weaponSelect">
+                <option value="rifle">RIFLE (TRACER: WHITE)</option>
+                <option value="shotgun">SHOTGUN (SPREAD)</option>
+            </select>
+            <button id="btnJoin">ゲーム開始</button>
         </div>
     </div>
 
-    <div id="coords">X: 0.00 Z: 0.00</div>
-    <div id="info">PLAYERS: 1<br>STATUS: READY</div>
+    <div id="top-ui">
+        POS: X <span id="posX">0</span> Z <span id="posZ">0</span><br>
+        HP: <span id="hpText">100</span>
+    </div>
+    <div id="playerCount">PLAYERS: 1</div>
     <div id="hp-container"><div id="hp-bar"></div></div>
     <div id="crosshair">+</div>
-    <div id="mobile-fire">FIRE</div>
+    <button id="shootBtn">FIRE</button>
 
     <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        const HUB_NAME = "Achex_Pro_FPS_v1";
+        const HUB_NAME = "Achex_FPS_Final_2026"; 
         const WS_URL = "wss://achex.ca:4001";
         
-        let scene, camera, renderer, socket, raycaster;
+        let scene, camera, renderer, socket;
         let myId = Math.random().toString(36).substring(7);
         let players = {}; 
+        let tracers = []; // 曳光弾リスト
         let moveState = { w: false, s: false, a: false, d: false };
         let isGameStarted = false;
         let myHP = 100;
-        let myData = { pos: {x: 0, z: 20}, rot: 0 };
+        let myData = { name: "", weapon: "", pos: {x: 0, z: 20}, rot: 0 };
 
-        // --- 初期化 ---
-        function init() {
+        function setupScene() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020202);
-            scene.fog = new THREE.Fog(0x020202, 15, 60);
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.Fog(0x050505, 10, 80);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            raycaster = new THREE.Raycaster();
+            camera.position.set(0, 1.6, 20);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-            scene.add(ambient);
-            const sun = new THREE.DirectionalLight(0x00ff00, 0.5);
-            sun.position.set(5, 10, 5);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+            sun.position.set(10, 20, 10);
             scene.add(sun);
 
             createMap();
             animate();
-            
-            // モバイル判定
-            if ('ontouchstart' in window) {
-                document.getElementById('mobile-fire').style.display = 'flex';
-            }
         }
 
         function createMap() {
-            const grid = new THREE.GridHelper(100, 50, 0x00ff00, 0x222222);
-            scene.add(grid);
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+            scene.add(new THREE.GridHelper(100, 40, 0x00ff00, 0x222222));
 
-            const wallMat = new THREE.MeshStandardMaterial({ color: 0x111111, wireframe: false });
-            for(let i=0; i<12; i++) {
-                const h = 2 + Math.random() * 5;
-                const box = new THREE.Mesh(new THREE.BoxGeometry(4, h, 4), wallMat);
-                box.position.set(Math.random()*60-30, h/2, Math.random()*60-30);
+            for(let i=0; i<15; i++) {
+                const box = new THREE.Mesh(new THREE.BoxGeometry(4, 8, 4), new THREE.MeshStandardMaterial({ color: 0x444444 }));
+                box.position.set(Math.random()*80-40, 4, Math.random()*80-40);
                 scene.add(box);
             }
         }
 
-        // --- 射撃・弾道エフェクト ---
-        function shoot() {
-            if (!isGameStarted || myHP <= 0) return;
+        // --- 射撃システム (曳光弾) ---
+        function fireBullet(fromPos, direction, remote = false) {
+            // 曳光弾の見た目 (細長い白い線)
+            const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const geometry = new THREE.BoxGeometry(0.05, 0.05, 2);
+            const tracer = new THREE.Mesh(geometry, material);
+            
+            tracer.position.copy(fromPos);
+            tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), direction.clone().normalize());
+            scene.add(tracer);
 
-            // 曳光弾（ビジュアル）の開始点と終了点を計算
-            const start = new THREE.Vector3();
-            camera.getWorldPosition(start);
-            start.y -= 0.2; // 銃口の位置っぽく下げる
+            tracers.push({
+                mesh: tracer,
+                dir: direction.clone().normalize(),
+                speed: 1.5,
+                life: 60 // フレーム生存時間
+            });
 
-            const direction = new THREE.Vector3();
-            camera.getWorldDirection(direction);
-            const end = start.clone().add(direction.multiplyScalar(50));
-
-            // レイキャストで当たり判定
-            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-            const intersects = raycaster.intersectObjects(Object.values(players).map(p => p.mesh));
-
-            if (intersects.length > 0) {
-                const targetId = intersects[0].object.userData.id;
-                sendNetMessage({ type: "hit", target: targetId, damage: 20 });
-                end.copy(intersects[0].point); // 当たった場所で曳光弾を止める
+            // 自分が撃った場合のみ当たり判定
+            if (!remote) {
+                checkHit(fromPos, direction);
+                sendNetwork({ type: "shoot", pos: fromPos, dir: direction });
             }
-
-            // 自分と他人に曳光弾を表示
-            createTracer(start, end);
-            sendNetMessage({ type: "fire", start: start, end: end });
         }
 
-        function createTracer(start, end) {
-            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 1 });
-            const points = [start, end];
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(geometry, material);
-            scene.add(line);
+        function checkHit(from, dir) {
+            const raycaster = new THREE.Raycaster(from, dir);
+            const targets = Object.values(players).map(p => p.mesh);
+            const intersects = raycaster.intersectObjects(targets);
 
-            // 徐々に消えるアニメーション
-            const interval = setInterval(() => {
-                material.opacity -= 0.1;
-                if (material.opacity <= 0) {
-                    scene.remove(line);
-                    geometry.dispose();
-                    material.dispose();
-                    clearInterval(interval);
+            if (intersects.length > 0) {
+                const hitObj = intersects[0].object;
+                // 当たった相手のIDを探す
+                for (let id in players) {
+                    if (players[id].mesh === hitObj) {
+                        sendNetwork({ type: "hit", targetId: id, damage: 10 });
+                        break;
+                    }
                 }
-            }, 30);
+            }
         }
 
         // --- ネットワーク ---
-        function connect() {
+        function connectNetwork() {
             socket = new WebSocket(WS_URL);
             socket.onopen = () => socket.send(JSON.stringify({ auth: "public", join: HUB_NAME }));
             socket.onmessage = (e) => {
@@ -165,79 +157,98 @@
                 const m = data.msg;
 
                 if (m.type === "move") updateRemotePlayer(data.sID, m);
-                if (m.type === "fire") createTracer(new THREE.Vector3().copy(m.start), new THREE.Vector3().copy(m.end));
-                if (m.type === "hit" && m.target === myId) takeDamage(m.damage);
+                if (m.type === "shoot") fireBullet(new THREE.Vector3(m.pos.x, m.pos.y, m.pos.z), new THREE.Vector3(m.dir.x, m.dir.y, m.dir.z), true);
+                if (m.type === "hit" && m.targetId === myId) applyDamage(m.damage);
             };
         }
 
-        function sendNetMessage(msg) {
+        function sendNetwork(msg) {
             if (socket && socket.readyState === 1) {
-                socket.send(JSON.stringify({ to: HUB_NAME, sID: myId, msg: msg }));
+                socket.send(JSON.stringify({ to: HUB_NAME, sID: myId, msg }));
             }
         }
 
-        function takeDamage(dmg) {
-            myHP -= dmg;
-            document.getElementById('hp-bar').style.width = myHP + "%";
+        function applyDamage(amt) {
+            myHP -= amt;
             if (myHP <= 0) {
-                alert("YOU DIED! RESPAWNING...");
+                alert("大破しました！再出撃します。");
                 myHP = 100;
                 camera.position.set(Math.random()*20-10, 1.6, 20);
-                document.getElementById('hp-bar').style.width = "100%";
             }
+            updateUI();
         }
 
         function updateRemotePlayer(id, data) {
             if (!players[id]) {
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
-                mesh.userData.id = id;
+                const mat = new THREE.MeshStandardMaterial({ color: data.weapon === "rifle" ? 0xff0000 : 0x00aaff });
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), mat);
                 scene.add(mesh);
-                players[id] = { mesh };
+                players[id] = { mesh, lastUpdate: Date.now() };
             }
             players[id].mesh.position.set(data.pos.x, 1, data.pos.z);
             players[id].mesh.rotation.y = data.rot;
-            document.getElementById('info').innerHTML = `PLAYERS: ${Object.keys(players).length + 1}<br>STATUS: ONLINE`;
         }
 
-        // --- ループ ---
+        function updateUI() {
+            document.getElementById('posX').innerText = Math.round(camera.position.x);
+            document.getElementById('posZ').innerText = Math.round(camera.position.z);
+            document.getElementById('hpText').innerText = myHP;
+            document.getElementById('hp-bar').style.width = myHP + "%";
+            document.getElementById('playerCount').innerText = `PLAYERS: ${Object.keys(players).length + 1}`;
+        }
+
         function animate() {
             requestAnimationFrame(animate);
-            if (isGameStarted && myHP > 0) {
+
+            if (isGameStarted) {
                 const speed = 0.15;
                 if (moveState.w) { camera.position.x -= Math.sin(camera.rotation.y) * speed; camera.position.z -= Math.cos(camera.rotation.y) * speed; }
                 if (moveState.s) { camera.position.x += Math.sin(camera.rotation.y) * speed; camera.position.z += Math.cos(camera.rotation.y) * speed; }
                 if (moveState.a) { camera.position.x -= Math.cos(camera.rotation.y) * speed; camera.position.z += Math.sin(camera.rotation.y) * speed; }
                 if (moveState.d) { camera.position.x += Math.cos(camera.rotation.y) * speed; camera.position.z -= Math.sin(camera.rotation.y) * speed; }
 
-                document.getElementById('coords').innerText = `X: ${camera.position.x.toFixed(2)} Z: ${camera.position.z.toFixed(2)}`;
-                
-                sendNetMessage({ type: "move", pos: { x: camera.position.x, z: camera.position.z }, rot: camera.rotation.y });
+                updateUI();
+                sendNetwork({ type: "move", pos: { x: camera.position.x, z: camera.position.z }, rot: camera.rotation.y, weapon: myData.weapon });
             }
-            if (renderer) renderer.render(scene, camera);
+
+            // 曳光弾の更新
+            for (let i = tracers.length - 1; i >= 0; i--) {
+                const t = tracers[i];
+                t.mesh.position.add(t.dir.clone().multiplyScalar(t.speed));
+                t.life--;
+                if (t.life <= 0) {
+                    scene.remove(t.mesh);
+                    tracers.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
         }
 
         // --- イベント ---
         document.getElementById('btnJoin').onclick = () => {
+            myData.weapon = document.getElementById('weaponSelect').value;
             document.getElementById('ui-layer').style.display = 'none';
+            document.getElementById('hp-container').style.display = 'block';
             document.getElementById('crosshair').style.display = 'block';
-            if (!('ontouchstart' in window)) document.body.requestPointerLock();
+            document.getElementById('shootBtn').style.display = 'block';
+            if(!/Android|iPhone/i.test(navigator.userAgent)) document.body.requestPointerLock();
             isGameStarted = true;
-            connect();
+            connectNetwork();
         };
 
+        const handleShoot = () => { if(isGameStarted) {
+            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            fireBullet(camera.position.clone(), dir);
+        }};
+
+        document.getElementById('shootBtn').addEventListener('touchstart', (e) => { e.preventDefault(); handleShoot(); });
+        window.addEventListener('mousedown', (e) => { if(document.pointerLockElement) handleShoot(); });
         window.addEventListener('keydown', (e) => { moveState[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', (e) => { moveState[e.key.toLowerCase()] = false; });
-        window.addEventListener('mousedown', (e) => { if(document.pointerLockElement) shoot(); });
-        document.getElementById('mobile-fire').addEventListener('touchstart', (e) => { e.preventDefault(); shoot(); });
+        window.addEventListener('mousemove', (e) => { if (document.pointerLockElement) camera.rotation.y -= e.movementX * 0.002; });
 
-        window.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement) {
-                camera.rotation.y -= e.movementX * 0.003;
-                camera.rotation.x = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, camera.rotation.x - e.movementY * 0.003));
-            }
-        });
-
-        init();
+        setupScene();
     </script>
 </body>
 </html>
