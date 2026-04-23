@@ -3,23 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tank Online 3D: Fixed</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <title>Tank Online: Tactical Team 3D</title>
     <style>
         * { touch-action: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; }
         body { 
-            margin: 0; overflow: hidden; background-color: #000; 
+            margin: 0; overflow: hidden; background-color: #f0e68c; 
             font-family: 'Arial Black', sans-serif; 
             position: fixed; width: 100%; height: 100%; 
         }
-        #setup, #ui, #team-indicator, #killLog, #mobile-controls { position: absolute; z-index: 10; }
-        
+        canvas { display: block; background-color: #87CEEB; }
+
         #setup { 
-            inset: 0; background: rgba(0,0,0,0.92); 
+            position: absolute; inset: 0; background: rgba(0,0,0,0.92); 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            color: white; padding: 20px; text-align: center; overflow-y: auto; z-index: 100;
+            z-index: 100; color: white; padding: 20px; text-align: center; overflow-y: auto; 
         }
-        .btn { padding: 14px 24px; margin: 8px; font-size: 15px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; transition: 0.2s; }
+        .btn { 
+            padding: 14px 24px; margin: 8px; font-size: 15px; cursor: pointer; 
+            border-radius: 10px; border: none; font-weight: bold; transition: 0.2s; 
+        }
         .selected { border: 4px solid #f1c40f !important; box-shadow: 0 0 20px #f1c40f; }
         .opt-group { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
         .sys-btn { background: #2c3e50; color: white; width: 170px; text-align: left; }
@@ -27,217 +29,675 @@
         .label { font-size: 13px; color: #f1c40f; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
 
         #ui { 
-            top: 12px; left: 12px; background: rgba(255,255,255,0.9); 
+            position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,0.9); 
             padding: 12px 16px; border-radius: 10px; border: 3px solid #333; 
-            min-width: 190px; pointer-events: none; display: none;
+            min-width: 190px; pointer-events: none; z-index: 100; 
         }
         .bar-bg { width: 100%; height: 8px; background: #ccc; margin-top: 6px; border-radius: 4px; overflow: hidden; }
         #gadget-bar { height: 100%; background: #8e44ad; transition: width 0.2s; }
         #defense-bar { height: 100%; background: #2980b9; transition: width 0.2s; }
 
         #team-indicator { 
-            top: 12px; left: 50%; transform: translateX(-50%); 
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%); 
             background: rgba(0,0,0,0.7); color: #f1c40f; padding: 6px 20px; 
-            border-radius: 30px; font-size: 15px; border: 2px solid #f1c40f; display: none;
+            border-radius: 30px; font-size: 15px; z-index: 200; border: 2px solid #f1c40f; 
         }
-        #killLog { top: 70px; right: 15px; color: #ff4d4d; font-size: 15px; text-shadow: 1px 1px 2px #000; text-align: right; font-weight: bold; pointer-events: none; }
+        #killLog { 
+            position: absolute; top: 70px; right: 15px; color: #c0392b; font-size: 15px; 
+            text-shadow: 1px 1px 2px #fff; text-align: right; font-weight: bold; 
+            pointer-events: none; z-index: 210; line-height: 1.3; 
+        }
 
-        #mobile-controls { inset: 0; pointer-events: none; display: none; }
-        #stick-area { position: absolute; bottom: 30px; left: 30px; width: 160px; height: 160px; background: rgba(255,255,255,0.15); border-radius: 50%; pointer-events: auto; border: 3px solid rgba(255,255,255,0.3); }
-        #stick { position: absolute; top: 50%; left: 50%; width: 65px; height: 65px; background: rgba(255,255,255,0.7); border-radius: 50%; transform: translate(-50%, -50%); }
-        .action-btn { position: absolute; width: 75px; height: 75px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; pointer-events: auto; font-size: 13px; font-weight: bold; border: 3px solid #fff; }
+        #mobile-controls { 
+            display: none; position: absolute; inset: 0; pointer-events: none; z-index: 50; 
+        }
+        #stick-area { 
+            position: absolute; bottom: 30px; left: 30px; width: 160px; height: 160px; 
+            background: rgba(255,255,255,0.15); border-radius: 50%; 
+            pointer-events: auto; border: 3px solid rgba(255,255,255,0.3); 
+        }
+        #stick { 
+            position: absolute; top: 50%; left: 50%; width: 65px; height: 65px; 
+            background: rgba(255,255,255,0.7); border-radius: 50%; transform: translate(-50%, -50%); 
+        }
+        .action-btn { 
+            position: absolute; width: 75px; height: 75px; background: rgba(0,0,0,0.6); 
+            color: white; border-radius: 50%; display: flex; align-items: center; 
+            justify-content: center; pointer-events: auto; font-size: 13px; font-weight: bold; 
+            border: 3px solid #fff; 
+        }
         #btn-fire { bottom: 140px; right: 30px; width: 95px; height: 95px; background: rgba(192,57,43,0.85); font-size: 20px; }
         #btn-gadget { bottom: 40px; right: 150px; background: rgba(142,68,173,0.85); }
         #btn-def { bottom: 40px; right: 40px; background: rgba(41,128,185,0.85); }
 
-        .ammo-selector { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
-        .ammo-btn { width: 48px; height: 48px; background: rgba(0,0,0,0.7); color: #fff; border: 2px solid #f1c40f; border-radius: 8px; font-weight: bold; font-size: 12px; }
+        .ammo-selector { 
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%); 
+            display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 60; 
+        }
+        .ammo-btn { 
+            width: 48px; height: 48px; background: rgba(0,0,0,0.7); color: #fff; 
+            border: 3px solid #f1c40f; border-radius: 10px; font-weight: bold; 
+            display: flex; align-items: center; justify-content: center; font-size: 18px; 
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
     <div id="setup">
-        <h1 style="color:#f1c40f;">TANK ONLINE 3D</h1>
-        <div class="label">戦車タイプ</div>
+        <h1 style="color:#f1c40f; margin-bottom:10px;">TANK ONLINE: TEAM 3D</h1>
+        <p id="team-info" style="font-size: 15px; color: #2ecc71;">URL末尾に #TeamA などでチーム参加</p>
+        
+        <div class="label">戦車タイプ選択</div>
         <div class="opt-group">
             <button id="type-heavy" class="btn sys-btn">重戦車<small>HP:150 / 高火力</small></button>
             <button id="type-medium" class="btn sys-btn selected">中戦車<small>HP:100 / 標準</small></button>
             <button id="type-light" class="btn sys-btn">軽戦車<small>HP:60 / 高速</small></button>
         </div>
-        <div class="label">セカンダリ [Q]</div>
+
+        <div class="label">セカンダリ武装 [Q]</div>
         <div class="opt-group">
-            <button id="def-1" class="btn sys-btn selected">AT4<small>ミサイル</small></button>
-            <button id="def-6" class="btn sys-btn">ADS<small>防御システム</small></button>
-            <button id="def-7" class="btn sys-btn">C4<small>設置・爆破</small></button>
+            <button id="def-1" class="btn sys-btn selected">AT4<small>誘導ミサイル</small></button>
+            <button id="def-6" class="btn sys-btn">ADS防御<small>被弾無効化</small></button>
+            <button id="def-7" class="btn sys-btn">リモートC4<small>設置・起爆</small></button>
+            <button id="def-4" class="btn sys-btn">近接信管弾<small>自動爆発</small></button>
         </div>
-        <button id="start-game" class="btn" style="background:#f1c40f; color:#000; width:280px;">出撃開始</button>
+
+        <button id="start-game" class="btn" style="background:#f1c40f; color:#000; width:320px; font-size:22px; margin-top:30px;">BATTLE START</button>
     </div>
 
     <div id="team-indicator">TEAM: <span id="team-name">Free</span></div>
+
     <div id="ui">
-        <div id="hpDisplay" style="font-size:18px; font-weight:bold;">HP: 100</div>
-        <div id="weaponDisplay" style="font-size:14px; color:#e67e22;">HE</div>
+        <div id="hpDisplay" style="font-size:19px; font-weight:bold;">HP: 100</div>
+        <div id="weaponDisplay" style="font-size:14px;">HE</div>
+        <div style="font-size:12px; margin-top:6px;">修理 [R]</div>
         <div class="bar-bg"><div id="gadget-bar"></div></div>
+        <div style="font-size:12px; margin-top:6px;">武装 [Q]</div>
         <div class="bar-bg"><div id="defense-bar"></div></div>
     </div>
+
     <div id="killLog"></div>
+
     <div id="mobile-controls">
         <div id="stick-area"><div id="stick"></div></div>
         <div id="btn-fire" class="action-btn">FIRE</div>
-        <div id="btn-gadget" class="action-btn">修理(R)</div>
-        <div id="btn-def" class="action-btn">武装(Q)</div>
-        <div class="ammo-selector">
-            <button class="ammo-btn" onclick="setAmmo('1')">HE</button>
-            <button class="ammo-btn" onclick="setAmmo('2')">AP</button>
-            <button class="ammo-btn" onclick="setAmmo('3')">FSDS</button>
-        </div>
+        <div id="btn-gadget" class="action-btn">R</div>
+        <div id="btn-def" class="action-btn">Q</div>
+        <div class="ammo-selector" id="ammo-list"></div>
     </div>
+
+    <canvas id="gameCanvas"></canvas>
 
     <script>
     (function() {
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xeddfb3);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        const canvas = document.getElementById('gameCanvas');
+        
+        // --- 3D用変数 ---
+        let scene, camera, renderer;
+        let tankMeshes = {};
+        let activeShellMeshes = [];
+        let activeExplosionMeshes = [];
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.6);
-        sun.position.set(200, 500, 100);
-        scene.add(sun);
+        const worldWidth = 2000, worldHeight = 1500;
+        const HUB_NAME = "tank_v2_team_final_2026_3d";
 
-        const HUB_NAME = "tank_3d_pro_final";
-        const player = {
-            id: "P-" + Math.random().toString(36).substr(2, 5),
-            type: 'medium', x: 100, y: 100, angle: 0, turretAngle: 0, vx: 0, vy: 0, hp: 100, maxHp: 100,
-            reloading: 0, currentAmmo: '1', gadgetCD: 0, repairPool: 0, defense: 1, defenseCD: 0,
-            mesh: null, turretMesh: null, team: "Free"
-        };
-
-        const stickData = { active: false, x: 0, y: 0 }; // 修正ポイント：これを追加
-        const players = {}, shells = [], explosions = [], keys = {};
-        let isMobileMode = false;
+        const teamName = window.location.hash.substring(1) || "Free";
+        document.getElementById('team-name').innerText = teamName;
 
         const tankSpecs = {
-            'heavy':  { hp: 150, speed: 0.3, power: 1.5, size: 1.2 },
-            'medium': { hp: 100, speed: 0.5, power: 1.0, size: 1.0 },
-            'light':  { hp: 60,  speed: 0.8, power: 0.6, size: 0.8 }
+            'heavy':  { hp: 150, maxHp: 150, speed: 0.35, powerMult: 1.8, reloadMult: 1.5, size: 1.0, color: 0x1a2a1a },
+            'medium': { hp: 100, maxHp: 100, speed: 0.5,  powerMult: 1.0, reloadMult: 1.0, size: 1.0, color: 0x2d5a27 },
+            'light':  { hp: 60,  maxHp: 60,  speed: 0.6,  powerMult: 0.5, reloadMult: 0.7, size: 1.0, color: 0x4a7c44 }
         };
 
         const ammoTypes = {
-            '1': { name: "HE", power: 20, reload: 40, speed: 10, color: 0xe67e22 },
-            '2': { name: "AP", power: 30, reload: 60, speed: 16, color: 0x34495e },
-            '3': { name: "APFSDS", power: 45, reload: 100, speed: 30, color: 0x2c3e50 }
+            '1': { name: "HE", power: 18, reload: 10, speed: 11, color: 0xe67e22, isExplosive: true },
+            '2': { name: "AP", power: 22, reload: 25, bounce: true, speed: 13, color: 0x34495e },
+            '3': { name: "APFSDS", power: 35, reload: 55, speed: 45, color: 0x2c3e50 },
+            '4': { name: "AE", power: 8, reload: 18, bounce: true, speed: 8, color: 0xf1c40f },
+            '5': { name: "HESH", power: 20, reload: 35, speed: 10, color: 0x9b59b6, isExplosive: true, bigExplosion: true },
+            '6': { name: "FS", power: 4, reload: 35, speed: 15, color: 0x7f8c8d, isFlechette: true },
+            '7': { name: "APHE", power: 25, reload: 35, speed: 18, color: 0xe74c3c, isExplosive: true },
+            '8': { name: "HEAT", power: 20, reload: 25, speed: 10, color: 0xd35400, isExplosive: true, isCluster: true }
         };
 
-        function createTankMesh(type) {
-            const group = new THREE.Group();
-            const s = tankSpecs[type].size;
-            const body = new THREE.Mesh(new THREE.BoxGeometry(40*s, 15*s, 30*s), new THREE.MeshLambertMaterial({ color: 0x2d5a27 }));
-            body.position.y = 7.5*s; group.add(body);
-            const turretGroup = new THREE.Group(); turretGroup.position.y = 15*s;
-            const head = new THREE.Mesh(new THREE.BoxGeometry(25*s, 10*s, 25*s), new THREE.MeshLambertMaterial({ color: 0x2d5a27 }));
-            turretGroup.add(head);
-            const barrel = new THREE.Mesh(new THREE.BoxGeometry(35*s, 5*s, 5*s), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-            barrel.position.x = 17.5*s; turretGroup.add(barrel);
-            group.add(turretGroup);
-            return { group, turret: turretGroup };
+        const player = {
+            id: "P-" + Math.random().toString(36).substr(2, 5),
+            type: 'medium', team: teamName, x: 0, y: 0, angle: 0, turretAngle: 0, vx: 0, vy: 0, hp: 100, maxHp: 100,
+            reloading: 0, maxReload: 0, currentAmmo: '1', name: "Guest",
+            gadgetCD: 0, repairPool: 0,
+            defense: 1, defenseCD: 0, adsActive: 0, c4: null, shake: 0
+        };
+
+        const players = {}, shells = [], explosions = [], keys = {};
+        let isMobileMode = false;
+        let socket;
+
+        const walls = [ 
+            {x: 0, y: 0, w: worldWidth, h: 20}, {x: 0, y: worldHeight-20, w: worldWidth, h: 20},
+            {x: 0, y: 0, w: 20, h: worldHeight}, {x: worldWidth-20, y: 0, w: 20, h: worldHeight},
+            {x: worldWidth/2-100, y: worldHeight/2-300, w: 200, h: 40}, 
+            {x: worldWidth/2-100, y: worldHeight/2+260, w: 200, h: 40},
+            {x: worldWidth/2-400, y: worldHeight/2-50, w: 250, h: 100},
+            {x: worldWidth/2+150, y: worldHeight/2-50, w: 250, h: 100},
+            {x: 400, y: 300, w: 40, h: 400}, {x: worldWidth-440, y: 300, w: 40, h: 400},
+            {x: 400, y: worldHeight-700, w: 40, h: 400}, {x: worldWidth-440, y: worldHeight-700, w: 40, h: 400},
+            {x: 200, y: 200, w: 80, h: 80}, {x: worldWidth-280, y: 200, w: 80, h: 80},
+            {x: 200, y: worldHeight-280, w: 80, h: 80}, {x: worldWidth-280, y: worldHeight-280, w: 80, h: 80}
+        ];
+
+        // ammoボタン作成
+        const ammoList = document.getElementById('ammo-list');
+        Object.keys(ammoTypes).forEach(key => {
+            const btn = document.createElement('div');
+            btn.className = 'ammo-btn';
+            btn.innerText = key;
+            btn.onclick = () => player.currentAmmo = key;
+            ammoList.appendChild(btn);
+        });
+
+        // スティック制御
+        let stickData = { active: false, x: 0, y: 0 };
+        const stickEl = document.getElementById('stick'), stickArea = document.getElementById('stick-area');
+        stickArea.addEventListener('touchstart', (e) => { stickData.active = true; handleStick(e); });
+        stickArea.addEventListener('touchmove', (e) => { if(stickData.active) { e.preventDefault(); handleStick(e); } }, {passive:false});
+        stickArea.addEventListener('touchend', () => { stickData.active = false; stickData.x = 0; stickData.y = 0; stickEl.style.transform = `translate(-50%, -50%)`; });
+
+        function handleStick(e) {
+            const touch = e.touches[0], rect = stickArea.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+            const dx = touch.clientX - cx, dy = touch.clientY - cy;
+            const dist = Math.min(60, Math.hypot(dx, dy)), angle = Math.atan2(dy, dx);
+            stickData.x = (Math.cos(angle) * dist) / 60;
+            stickData.y = (Math.sin(angle) * dist) / 60;
+            stickEl.style.transform = `translate(calc(-50% + ${Math.cos(angle)*dist}px), calc(-50% + ${Math.sin(angle)*dist}px))`;
         }
 
-        function fire() {
-            if(player.reloading > 0) return;
-            const a = ammoTypes[player.currentAmmo];
-            const s = { 
-                x: player.x + Math.cos(player.turretAngle)*40, y: player.y + Math.sin(player.turretAngle)*40,
-                vx: Math.cos(player.turretAngle)*a.speed, vy: Math.sin(player.turretAngle)*a.speed,
-                life: 200, color: a.color, mesh: new THREE.Mesh(new THREE.SphereGeometry(3), new THREE.MeshBasicMaterial({color: a.color}))
+        // モバイルボタン
+        document.getElementById('btn-fire').addEventListener('touchstart', (e) => { e.preventDefault(); keys[' '] = true; });
+        document.getElementById('btn-fire').addEventListener('touchend', () => keys[' '] = false);
+        document.getElementById('btn-gadget').addEventListener('touchstart', (e) => { e.preventDefault(); useGadget(); });
+        document.getElementById('btn-def').addEventListener('touchstart', (e) => { e.preventDefault(); useDefense(); });
+
+        function isPointInWall(x, y, padding = 25) {
+            return walls.some(w => x + padding > w.x && x - padding < w.x + w.w && y + padding > w.y && y - padding < w.y + w.h);
+        }
+
+        function respawn() {
+            let safe = false;
+            while (!safe) {
+                player.x = Math.random() * (worldWidth - 200) + 100;
+                player.y = Math.random() * (worldHeight - 200) + 100;
+                if (!isPointInWall(player.x, player.y, 45)) safe = true;
+            }
+            const spec = tankSpecs[player.type];
+            player.hp = spec.hp; player.maxHp = spec.maxHp;
+            player.vx = 0; player.vy = 0; player.repairPool = 0; player.c4 = null;
+        }
+
+        function setupSelect(id) {
+            document.getElementById(id).onclick = () => {
+                const parts = id.split('-');
+                if(parts[0] === 'type') player.type = parts[1];
+                if(parts[0] === 'def') player.defense = parseInt(parts[1]);
+                const btns = document.getElementById(id).parentElement.querySelectorAll('.btn');
+                btns.forEach(b => b.classList.remove('selected'));
+                document.getElementById(id).classList.add('selected');
             };
-            scene.add(s.mesh); shells.push(s);
-            player.reloading = a.reload;
+        }
+        ['type-heavy','type-medium','type-light','def-1','def-4','def-6','def-7'].forEach(setupSelect);
+
+        document.getElementById('start-game').onclick = () => {
+            player.name = prompt("名前を入力", "T34") || "Guest";
+            document.getElementById('setup').style.display = 'none';
+            if('ontouchstart' in window) { 
+                isMobileMode = true; 
+                document.getElementById('mobile-controls').style.display = 'block'; 
+            }
+            respawn();
+            initSocket();
+            init3D(); // 3Dエンジンの初期化
+            requestAnimationFrame(gameLoop);
+        };
+
+        function initSocket() {
+            socket = new WebSocket('wss://cloud.achex.ca/');
+
+            socket.onopen = () => {
+                console.log('%c✅ Achex Cloud に接続成功', 'color:#2ecc71; font-weight:bold');
+                socket.send(JSON.stringify({auth: player.id, passwd: "pass"}));
+                socket.send(JSON.stringify({joinHub: HUB_NAME}));
+            };
+
+            socket.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.auth || data.joinHub) return;
+
+                    if (data.type === 'move' && data.id !== player.id) {
+                        players[data.id] = {...data, lastUpdate: Date.now()};
+                    }
+                    if (data.type === 'fire') shells.push(data.shell);
+                    if (data.type === 'boom') {
+                        createExplosion(data.x, data.y, data.power, data.ownerName, data.ownerTeam, data.ownerId, data.weaponName, false);
+                    }
+                    if (data.type === 'kill') showKillLog(data.victim, data.attacker, data.weaponName);
+                    if (data.type === 'c4_placed') {
+                        if (players[data.ownerId]) players[data.ownerId].c4 = { x: data.x, y: data.y };
+                    }
+                } catch(err) {}
+            };
+
+            socket.onerror = (err) => console.error('WebSocketエラー:', err);
+            socket.onclose = () => console.warn('⚠️ WebSocket切断されました');
         }
 
-        function repair() { if(player.gadgetCD <= 0) { player.repairPool = 40; player.gadgetCD = 600; } }
+        function useGadget() {
+            if(player.gadgetCD > 0) return;
+            player.repairPool = 30; player.gadgetCD = 600;
+        }
 
-        window.setAmmo = (id) => { player.currentAmmo = id; };
+        function useDefense() {
+            if(player.defenseCD > 0) return;
+            const tAngle = player.turretAngle;
+            let s = null;
+            const base = { x: player.x, y: player.y, owner: player.id, ownerName: player.name, ownerTeam: player.team };
+
+            if(player.defense === 1) { // AT4
+                s = { ...base, vx: Math.cos(tAngle)*6, vy: Math.sin(tAngle)*6, power: 40, color: 0xc0392b, isMissile: true, isExplosive: true, weaponName: "AT4", life: 500 };
+                player.defenseCD = 240;
+            } else if(player.defense === 6) { // ADS
+                player.adsActive = 300; player.defenseCD = 700;
+            } else if(player.defense === 7) { // C4
+                if (!player.c4) {
+                    player.c4 = { x: player.x, y: player.y };
+                    if(socket) socket.send(JSON.stringify({toH: HUB_NAME, type: 'c4_placed', x: player.x, y: player.y, ownerId: player.id}));
+                } else {
+                    createExplosion(player.c4.x, player.c4.y, 60, player.name, player.team, player.id, "リモートC4", true);
+                    player.c4 = null; player.defenseCD = 400;
+                }
+            } else if(player.defense === 4) { // 近接信管
+                s = { ...base, vx: Math.cos(tAngle)*14, vy: Math.sin(tAngle)*14, power: 30, color: 0x2ecc71, isProxy: true, proxDist: 110, isExplosive: true, weaponName: "近接信管弾", life: 180 };
+                player.defenseCD = 350;
+            }
+
+            if(s) {
+                shells.push(s);
+                if(socket) socket.send(JSON.stringify({toH: HUB_NAME, type: 'fire', shell: s}));
+            }
+        }
+
+        function fireShell(ammoKey) {
+            const spec = tankSpecs[player.type];
+            const a = ammoTypes[ammoKey];
+            const base = { x: player.x + Math.cos(player.turretAngle)*45, y: player.y + Math.sin(player.turretAngle)*45, owner: player.id, ownerName: player.name, ownerTeam: player.team, weaponName: a.name };
+
+            if (a.isFlechette) {
+                for(let i=0; i<12; i++) {
+                    const ang = player.turretAngle + (Math.random()-0.5)*0.25;
+                    const s = { ...base, vx: Math.cos(ang)*a.speed*(0.9+Math.random()*0.2), vy: Math.sin(ang)*a.speed*(0.9+Math.random()*0.2), power: a.power * spec.powerMult, color: a.color, life: 40 };
+                    shells.push(s);
+                    if(socket) socket.send(JSON.stringify({toH: HUB_NAME, type: 'fire', shell: s}));
+                }
+            } else {
+                const s = { ...base, vx: Math.cos(player.turretAngle)*a.speed, vy: Math.sin(player.turretAngle)*a.speed, power: a.power * spec.powerMult, bounce: a.bounce, color: a.color, isExplosive: a.isExplosive, life: 200, bCount: 3, bigExp: a.bigExplosion };
+                shells.push(s);
+                if(socket) socket.send(JSON.stringify({toH: HUB_NAME, type: 'fire', shell: s}));
+            }
+            player.vx -= Math.cos(player.turretAngle) * (a.power * 0.1);
+            player.vy -= Math.sin(player.turretAngle) * (a.power * 0.1);
+        }
+
+        window.onkeydown = (e) => { 
+            keys[e.key] = true; 
+            if(ammoTypes[e.key]) player.currentAmmo = e.key;
+            if(e.key.toLowerCase()==='r') useGadget();
+            if(e.key.toLowerCase()==='q') useDefense();
+        };
+        window.onkeyup = (e) => keys[e.key] = false;
+
+        function createExplosion(x, y, power, ownerName, ownerTeam, ownerId, weaponName, isOwner) {
+            const isCritical = power >= 25;
+            explosions.push({ x, y, r: 0, life: isCritical ? 45 : 25, critical: isCritical });
+            
+            const dist = Math.hypot(player.x - x, player.y - y);
+            if (dist < (isCritical ? 130 : 90)) {
+                const isFriendly = (ownerTeam !== "Free" && ownerTeam === player.team && ownerId !== player.id);
+                if (!isFriendly) {
+                    processDamage(power * 0.8, ownerName, weaponName);
+                }
+            }
+            if (isOwner && socket) {
+                socket.send(JSON.stringify({toH: HUB_NAME, type: 'boom', x, y, power, ownerName, ownerTeam, ownerId, weaponName}));
+            }
+        }
+
+        function processDamage(power, ownerName, weaponName) {
+            if(player.hp <= 0) return;
+            player.hp -= power; player.shake = Math.min(30, power);
+            if (player.hp <= 0) {
+                if(socket) socket.send(JSON.stringify({toH: HUB_NAME, type: 'kill', victim:player.name, attacker:ownerName, weaponName:weaponName}));
+                respawn(); 
+            }
+        }
 
         function update() {
             const spec = tankSpecs[player.type];
-            
+            let moveSpeed = spec.speed;
+
             if (isMobileMode && stickData.active) {
-                // 戦車の向きを基準にした移動 (Up: 前進, Down: 後進, Left/Right: 旋回)
-                const forward = -stickData.y; 
-                const turn = stickData.x;
-                player.angle += turn * 0.05;
-                const moveSpeed = forward * spec.speed * 8;
-                player.vx = Math.cos(player.angle) * moveSpeed;
-                player.vy = Math.sin(player.angle) * moveSpeed;
-                player.turretAngle = player.angle; // 砲塔を車体に合わせる
+                const targetAngle = Math.atan2(stickData.y, stickData.x);
+                player.angle = targetAngle; player.turretAngle = targetAngle;
+                const force = Math.hypot(stickData.x, stickData.y);
+                player.vx += Math.cos(targetAngle) * force * moveSpeed;
+                player.vy += Math.sin(targetAngle) * force * moveSpeed;
             } else {
-                if(keys['ArrowUp']) { player.vx = Math.cos(player.angle)*spec.speed*6; player.vy = Math.sin(player.angle)*spec.speed*6; }
-                else if(keys['ArrowDown']) { player.vx = -Math.cos(player.angle)*spec.speed*4; player.vy = -Math.sin(player.angle)*spec.speed*4; }
-                else { player.vx *= 0.9; player.vy *= 0.9; }
-                if(keys['ArrowLeft']) player.angle -= 0.04;
-                if(keys['ArrowRight']) player.angle += 0.04;
-                player.turretAngle = player.angle;
+                if (keys['ArrowUp']) { player.vx += Math.cos(player.angle)*moveSpeed; player.vy += Math.sin(player.angle)*moveSpeed; }
+                if (keys['ArrowDown']) { player.vx -= Math.cos(player.angle)*moveSpeed*0.5; player.vy -= Math.sin(player.angle)*moveSpeed*0.5; }
+                if (keys['ArrowLeft']) { player.angle -= 0.045; player.turretAngle -= 0.045; }
+                if (keys['ArrowRight']) { player.angle += 0.045; player.turretAngle += 0.045; }
+                if (keys['a']) player.turretAngle -= 0.05; if (keys['d']) player.turretAngle += 0.05;
             }
 
-            player.x += player.vx; player.y += player.vy;
+            player.vx *= 0.91; player.vy *= 0.91;
+            if (!isPointInWall(player.x + player.vx, player.y + player.vy, 22)) { 
+                player.x += player.vx; player.y += player.vy; 
+            }
+
+            if(player.repairPool > 0) { const amt = 0.15; player.hp = Math.min(player.maxHp, player.hp + amt); player.repairPool -= amt; }
             if(player.reloading > 0) player.reloading--;
             if(player.gadgetCD > 0) player.gadgetCD--;
-            if(player.repairPool > 0) { player.hp = Math.min(player.maxHp, player.hp + 0.1); player.repairPool -= 0.1; }
+            if(player.defenseCD > 0) player.defenseCD--;
+            if(player.adsActive > 0) player.adsActive--;
+            if(player.shake > 0) player.shake *= 0.9;
 
-            shells.forEach((s, i) => {
+            for (let i = shells.length-1; i >= 0; i--) {
+                const s = shells[i];
+                if (player.adsActive > 0 && s.owner !== player.id && Math.hypot(player.x - s.x, player.y - s.y) < 120) {
+                    if (s.ownerTeam === "Free" || s.ownerTeam !== player.team) {
+                        explosions.push({ x: s.x, y: s.y, r: 0, life: 10, critical: false });
+                        shells.splice(i,1); continue;
+                    }
+                }
                 s.x += s.vx; s.y += s.vy; s.life--;
-                s.mesh.position.set(s.x, 15, s.y);
-                if(s.life <= 0) { scene.remove(s.mesh); shells.splice(i, 1); }
-            });
 
-            if(player.mesh) {
-                player.mesh.position.set(player.x, 0, player.y);
-                player.mesh.rotation.y = -player.angle;
+                const hitW = walls.find(w => s.x > w.x && s.x < w.x + w.w && s.y > w.y && s.y < w.y + w.h);
+                if (hitW) {
+                    if (s.bounce && s.bCount-- > 0) { 
+                        if (s.x - s.vx <= hitW.x || s.x - s.vx >= hitW.x + hitW.w) s.vx *= -1; 
+                        else s.vy *= -1; 
+                    } else s.life = 0;
+                }
+                
+                if (s.owner !== player.id && Math.hypot(player.x-s.x, player.y-s.y) < 32) {
+                    const isFriendly = (s.ownerTeam !== "Free" && s.ownerTeam === player.team);
+                    if (!isFriendly) {
+                        if (s.isExplosive) createExplosion(s.x, s.y, s.power, s.ownerName, s.ownerTeam, s.owner, s.weaponName, true);
+                        else processDamage(s.power, s.ownerName, s.weaponName);
+                        shells.splice(i,1); continue;
+                    }
+                }
+
+                if (s.life <= 0) {
+                    if (s.isExplosive) createExplosion(s.x, s.y, s.bigExp ? 45 : s.power, s.ownerName, s.ownerTeam, s.owner, s.weaponName, s.owner === player.id);
+                    shells.splice(i,1);
+                }
             }
 
-            camera.position.set(player.x - Math.cos(player.angle)*300, 200, player.y - Math.sin(player.angle)*300);
-            camera.lookAt(player.x, 20, player.y);
+            explosions.forEach((e, i) => { e.r += 4; if(e.life-- <= 0) explosions.splice(i,1); });
 
+            if (keys[' '] && player.reloading <= 0 && player.hp > 0) {
+                fireShell(player.currentAmmo);
+                player.reloading = ammoTypes[player.currentAmmo].reload * spec.reloadMult;
+                player.maxReload = player.reloading;
+            }
+
+            if (socket && socket.readyState === 1) {
+                socket.send(JSON.stringify({
+                    toH: HUB_NAME,
+                    type: 'move',
+                    id: player.id,
+                    x: player.x, y: player.y,
+                    angle: player.angle,
+                    tAngle: player.turretAngle,
+                    hp: player.hp,
+                    name: player.name,
+                    team: player.team,
+                    tankType: player.type,
+                    adsActive: player.adsActive
+                }));
+            }
+
+            // UI更新
             document.getElementById('hpDisplay').innerText = `HP: ${Math.ceil(player.hp)}`;
             document.getElementById('weaponDisplay').innerText = ammoTypes[player.currentAmmo].name;
-            document.getElementById('gadget-bar').style.width = (100 - (player.gadgetCD/600)*100) + "%";
+            document.getElementById('gadget-bar').style.width = (100 - Math.min(100, (player.gadgetCD/600)*100)) + "%";
+            document.getElementById('defense-bar').style.width = (100 - Math.min(100, (player.defenseCD/700)*100)) + "%";
         }
 
-        // Joystick Events
-        const stickEl = document.getElementById('stick'), stickArea = document.getElementById('stick-area');
-        stickArea.addEventListener('touchstart', (e) => { stickData.active = true; });
-        stickArea.addEventListener('touchmove', (e) => {
-            if(!stickData.active) return; e.preventDefault();
-            const touch = e.touches[0], rect = stickArea.getBoundingClientRect();
-            const dx = touch.clientX - (rect.left + 80), dy = touch.clientY - (rect.top + 80);
-            const dist = Math.min(60, Math.hypot(dx, dy)), ang = Math.atan2(dy, dx);
-            stickData.x = (Math.cos(ang)*dist)/60; stickData.y = (Math.sin(ang)*dist)/60;
-            stickEl.style.transform = `translate(calc(-50% + ${Math.cos(ang)*dist}px), calc(-50% + ${Math.sin(ang)*dist}px))`;
-        });
-        stickArea.addEventListener('touchend', () => { 
-            stickData.active = false; stickData.x = 0; stickData.y = 0; 
-            stickEl.style.transform = `translate(-50%, -50%)`; 
-        });
+        function showKillLog(v, a, w) { 
+            const l = document.getElementById('killLog'); 
+            l.innerHTML = `<span style="color:#222">${v}</span> <small>destroyed by</small> <span style="color:#c0392b">${a}</span> <br><small>[${w}]</small>`; 
+            setTimeout(()=>{ l.innerHTML = ""; }, 5000); 
+        }
 
-        document.getElementById('btn-fire').onclick = fire;
-        document.getElementById('btn-gadget').onclick = repair;
-        window.onkeydown = (e) => { keys[e.key] = true; if(e.key === ' ') fire(); if(e.key === 'r') repair(); };
-        window.onkeyup = (e) => keys[e.key] = false;
+        // ==========================================
+        // Three.js 3D Rendering Engine
+        // ==========================================
+        
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue
 
-        document.getElementById('start-game').onclick = () => {
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('ui').style.display = 'block';
-            if('ontouchstart' in window) { isMobileMode = true; document.getElementById('mobile-controls').style.display = 'block'; }
-            const res = createTankMesh(player.type);
-            player.mesh = res.group; player.turretMesh = res.turret;
-            scene.add(player.mesh);
-            animate();
-        };
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 5000);
 
-        function animate() { update(); renderer.render(scene, camera); requestAnimationFrame(animate); }
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(1000, 2000, 1000);
+            scene.add(dirLight);
+
+            // Ground
+            const groundGeo = new THREE.PlaneGeometry(worldWidth, worldHeight);
+            const groundMat = new THREE.MeshPhongMaterial({ color: 0xe3d5a1 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(worldWidth / 2, 0, worldHeight / 2);
+            scene.add(ground);
+
+            // Walls
+            walls.forEach(w => {
+                const geo = new THREE.BoxGeometry(w.w, 60, w.h);
+                const mat = new THREE.MeshPhongMaterial({ color: 0x5d4037 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(w.x + w.w / 2, 30, w.y + w.h / 2);
+                scene.add(mesh);
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function getTankMesh(id, spec, t) {
+            if (!tankMeshes[id]) {
+                const group = new THREE.Group();
+                const s = spec.size;
+                
+                // Body
+                const bodyGeo = new THREE.BoxGeometry(44 * s, 20, 36 * s);
+                const bodyMat = new THREE.MeshPhongMaterial({ color: spec.color });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.position.y = 10;
+                group.add(body);
+
+                // Turret Group
+                const turretGroup = new THREE.Group();
+                turretGroup.position.y = 25;
+                const turretGeo = new THREE.BoxGeometry(28 * s, 15, 28 * s);
+                const turretMat = new THREE.MeshPhongMaterial({ color: spec.color });
+                const turret = new THREE.Mesh(turretGeo, turretMat);
+                turretGroup.add(turret);
+
+                // Barrel
+                const barrelGeo = new THREE.BoxGeometry(40 * s, 6, 6);
+                const barrelMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+                barrel.position.set(20 * s, 0, 0);
+                turretGroup.add(barrel);
+
+                group.add(turretGroup);
+
+                // Name & HP Sprite
+                const canvas = document.createElement('canvas');
+                canvas.width = 256; canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                const tex = new THREE.CanvasTexture(canvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: tex });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.position.y = 60;
+                sprite.scale.set(150, 75, 1);
+                group.add(sprite);
+
+                group.userData = { body, turretGroup, sprite, canvas, ctx, tex };
+                scene.add(group);
+                tankMeshes[id] = group;
+            }
+            return tankMeshes[id];
+        }
+
+        function updateTankMesh(t, isSelf) {
+            const spec = tankSpecs[t.tankType || 'medium'];
+            const mesh = getTankMesh(t.id || 'self', spec, t);
+
+            mesh.position.set(t.x, 0, t.y);
+            mesh.userData.body.rotation.y = -t.angle;
+            mesh.userData.turretGroup.rotation.y = -(t.tAngle || t.turretAngle);
+
+            // Update Sprite (Name & HP)
+            const ctx = mesh.userData.ctx;
+            ctx.clearRect(0, 0, 256, 128);
+            ctx.fillStyle = isSelf ? "#000" : (t.team !== "Free" && t.team === player.team ? "#2980b9" : "#c0392b");
+            ctx.font = "bold 24px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(`${t.team} | ${t.name}`, 128, 40);
+            
+            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(28, 60, 200, 16);
+            ctx.fillStyle = (t.hp / spec.maxHp) > 0.3 ? "#2ecc71" : "#e74c3c";
+            ctx.fillRect(28, 60, 200 * Math.max(0, (t.hp / spec.maxHp)), 16);
+            mesh.userData.tex.needsUpdate = true;
+
+            // ADS Shield Effect
+            if (t.adsActive > 0) {
+                if (!mesh.userData.adsSphere) {
+                    const geo = new THREE.SphereGeometry(120, 16, 16);
+                    const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.5 });
+                    const sphere = new THREE.Mesh(geo, mat);
+                    mesh.add(sphere);
+                    mesh.userData.adsSphere = sphere;
+                }
+                mesh.userData.adsSphere.visible = true;
+                mesh.userData.adsSphere.rotation.y += 0.05;
+            } else {
+                if (mesh.userData.adsSphere) mesh.userData.adsSphere.visible = false;
+            }
+        }
+
+        function updateShellMeshes() {
+            activeShellMeshes.forEach(m => m.visible = false);
+            shells.forEach((s, i) => {
+                let mesh;
+                if (i < activeShellMeshes.length) {
+                    mesh = activeShellMeshes[i];
+                } else {
+                    const geo = new THREE.SphereGeometry(4, 8, 8);
+                    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                    mesh = new THREE.Mesh(geo, mat);
+                    scene.add(mesh);
+                    activeShellMeshes.push(mesh);
+                }
+                mesh.visible = true;
+                mesh.position.set(s.x, 15, s.y);
+                mesh.material.color.setHex(s.color);
+            });
+        }
+
+        function updateExplosionMeshes() {
+            activeExplosionMeshes.forEach(m => m.visible = false);
+            explosions.forEach((e, i) => {
+                let mesh;
+                if (i < activeExplosionMeshes.length) {
+                    mesh = activeExplosionMeshes[i];
+                } else {
+                    const geo = new THREE.SphereGeometry(1, 16, 16);
+                    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    scene.add(mesh);
+                    activeExplosionMeshes.push(mesh);
+                }
+                mesh.visible = true;
+                mesh.position.set(e.x, 10, e.y);
+                mesh.scale.set(e.r, e.r, e.r);
+                mesh.material.color.setHex(e.critical ? 0xff9632 : 0xffc832);
+                mesh.material.opacity = (e.life / (e.critical ? 45 : 25)) * 0.8;
+            });
+        }
+
+        function draw() {
+            // Clean up disconnected players
+            for (let id in tankMeshes) {
+                if (id !== 'self' && (!players[id] || Date.now() - players[id].lastUpdate >= 3000)) {
+                    scene.remove(tankMeshes[id]);
+                    delete tankMeshes[id];
+                }
+            }
+
+            // Update Self
+            if (player.hp > 0) {
+                updateTankMesh(player, true);
+                if (tankMeshes['self']) tankMeshes['self'].visible = true;
+            } else {
+                if (tankMeshes['self']) tankMeshes['self'].visible = false;
+            }
+
+            // Update Others
+            for (let id in players) {
+                if (Date.now() - players[id].lastUpdate < 3000) {
+                    updateTankMesh(players[id], false);
+                }
+            }
+
+            updateShellMeshes();
+            updateExplosionMeshes();
+
+            // Camera Tracking (TPS-like angled view)
+            if (player.hp > 0) {
+                let sx = 0, sz = 0;
+                if (player.shake > 0) {
+                    sx = (Math.random() - 0.5) * player.shake;
+                    sz = (Math.random() - 0.5) * player.shake;
+                }
+                const camDist = 500;
+                const camHeight = 600;
+                camera.position.set(player.x + sx, camHeight, player.y + camDist + sz);
+                camera.lookAt(player.x + sx, 0, player.y + sz);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function gameLoop() { 
+            update(); 
+            draw(); 
+            requestAnimationFrame(gameLoop); 
+        }
     })();
     </script>
 </body>
