@@ -1,201 +1,83 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Tank Sim - Heavy Flamethrower Edition</title>
-    <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #ui-layer { position: absolute; top: 10px; left: 10px; color: #fff; pointer-events: none; }
-        .bar-container { width: 200px; height: 10px; background: #333; margin-bottom: 5px; border: 1px solid #fff; }
-        #hp-bar { height: 100%; background: #0f0; width: 100%; transition: width 0.2s; }
-        #cooldown-bar { height: 100%; background: #ffae00; width: 0%; }
-        #controls-guide { position: absolute; bottom: 10px; right: 10px; color: rgba(255,255,255,0.7); font-size: 12px; text-align: right; }
-        #weapon-info { font-weight: bold; font-size: 18px; color: #ff4500; }
-    </style>
-</head>
-<body>
-
-<div id="ui-layer">
-    <div>HP</div>
-    <div class="bar-container"><div id="hp-bar"></div></div>
-    <div id="weapon-info">MAIN WEAPON: HEAVY FLAMETHROWER</div>
-    <div class="bar-container"><div id="cooldown-bar"></div></div>
-    <div id="kill-log"></div>
-</div>
-
-<div id="controls-guide">
-    WASD: Move / Mouse: Turret<br>
-    Click: Fire (Flamethrower) / Q: Secondary<br>
-    R: Repair
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-
-<script>
-// --- 初期設定 ---
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const engine = Matter.Engine.create();
-const world = engine.world;
-world.gravity.y = 0;
-
-// --- オブジェクト生成 ---
-const floorGeo = new THREE.PlaneGeometry(100, 100);
-const floorMat = new THREE.MeshStandardMaterial({ color: 0x556b2f });
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambientLight);
-const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-sunLight.position.set(10, 20, 10);
-scene.add(sunLight);
-
-const tankGroup = new THREE.Group();
-scene.add(tankGroup);
-
-const bodyGeo = new THREE.BoxGeometry(2, 0.8, 3);
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3e4d3e });
-const tankBodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-tankGroup.add(tankBodyMesh);
-
-const turretGroup = new THREE.Group();
-turretGroup.position.y = 0.6;
-tankGroup.add(turretGroup);
-
-const headGeo = new THREE.BoxGeometry(1.2, 0.6, 1.2);
-const headMesh = new THREE.Mesh(headGeo, bodyMat);
-turretGroup.add(headMesh);
-
-const barrelGeo = new THREE.CylinderGeometry(0.15, 0.15, 2);
-const barrelMat = new THREE.MeshStandardMaterial({ color: 0x222 });
-const barrelMesh = new THREE.Mesh(barrelGeo, barrelMat);
-barrelMesh.rotation.x = Math.PI / 2;
-barrelMesh.position.z = 1.2;
-turretGroup.add(barrelMesh);
-
-const tankPhys = Matter.Bodies.rectangle(0, 0, 2, 3, { frictionAir: 0.1 });
-Matter.World.add(world, tankPhys);
-
-// --- 変数 ---
-const keys = {};
-let mouseX = 0, mouseY = 0, isMouseDown = false;
-const flames = [];
-
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-window.addEventListener('mousedown', () => isMouseDown = true);
-window.addEventListener('mouseup', () => isMouseDown = false);
-window.addEventListener('mousemove', e => {
-    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-    mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
-});
-
-// --- 関数: 主砲としての火炎放射器 ---
-function fireMainFlamethrower() {
-    const flameGeo = new THREE.SphereGeometry(0.3, 8, 8); // 主砲なので少し大きく
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true }); // 高温をイメージ
-    const flame = new THREE.Mesh(flameGeo, flameMat);
+// --- カメラ追従ロジック (update関数内で毎フレーム実行) ---
+function updateCamera() {
+    // 戦車の背後 10ユニット、高さ 5ユニットの位置をターゲットにする
+    const relativeCameraOffset = new THREE.Vector3(0, 5, -10);
     
-    const turretWorldPos = new THREE.Vector3();
-    barrelMesh.getWorldPosition(turretWorldPos);
-    flame.position.copy(turretWorldPos);
-    
-    // 進行方向の取得
-    const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(turretGroup.quaternion).applyQuaternion(tankGroup.quaternion);
-    
-    // 短射程だが高密度の拡散
-    direction.x += (Math.random() - 0.5) * 0.15;
-    direction.z += (Math.random() - 0.5) * 0.15;
+    // 戦車の現在の向きに合わせてオフセットを回転
+    const cameraOffset = relativeCameraOffset.applyMatrix4(tank.matrixWorld);
 
-    scene.add(flame);
-    flames.push({
-        mesh: flame,
-        vel: direction.multiplyScalar(0.6), // 少し速めに
-        life: 0.6 // 射程を短く設定（寿命が短い）
-    });
+    // カメラの位置を滑らかに更新 (Lerpでスムーズな動きに)
+    camera.position.lerp(cameraOffset, 0.1);
+    
+    // 常に戦車の少し先（照準方向）を見つめるように設定
+    const lookAtPos = tank.position.clone().add(new THREE.Vector3(0, 2, 0));
+    camera.lookAt(lookAtPos);
 }
 
-// --- メインループ ---
-function animate() {
-    requestAnimationFrame(animate);
-    Matter.Engine.update(engine);
-
-    // 移動ロジック
-    if (keys['w']) Matter.Body.applyForce(tankPhys, tankPhys.position, { 
-        x: Math.sin(tankPhys.angle) * 0.02, 
-        y: Math.cos(tankPhys.angle) * 0.02 
-    });
-    if (keys['s']) Matter.Body.applyForce(tankPhys, tankPhys.position, { 
-        x: -Math.sin(tankPhys.angle) * 0.01, 
-        y: -Math.cos(tankPhys.angle) * 0.01 
-    });
-    if (keys['a']) Matter.Body.setAngularVelocity(tankPhys, -0.05);
-    if (keys['d']) Matter.Body.setAngularVelocity(tankPhys, 0.05);
-
-    tankGroup.position.set(tankPhys.position.x, 0.4, tankPhys.position.y);
-    tankGroup.rotation.y = -tankPhys.angle;
-
-    // 砲塔回転
-    turretGroup.rotation.y -= mouseX * 0.05;
-
-    // 主砲火炎放射 [左クリック]
-    if (isMouseDown) {
-        fireMainFlamethrower();
-        document.getElementById('cooldown-bar').style.width = '100%';
-    } else {
-        document.getElementById('cooldown-bar').style.width = '0%';
+// --- セカンダリ武装：火炎放射器 (Flamethrower) の実装 ---
+class Flamethrower {
+    constructor(scene, physicsWorld) {
+        this.scene = scene;
+        this.world = physicsWorld;
+        this.isFiring = false;
+        this.range = 8;
+        this.lastFireTime = 0;
+        this.fireRate = 50; // 連射速度（ミリ秒）
     }
 
-    // パーティクル更新
-    for (let i = flames.length - 1; i >= 0; i--) {
-        const f = flames[i];
-        f.mesh.position.add(f.vel);
-        f.life -= 0.04; // 減少速度を早めて射程を制限
-        f.mesh.scale.setScalar(f.life * 3);
-        
-        // 色をオレンジから赤へ変化させる演出
-        f.mesh.material.color.setHSL(0.1 * f.life, 1, 0.5);
-        f.mesh.material.opacity = f.life;
+    fire(turret) {
+        const now = Date.now();
+        if (now - this.lastFireTime < this.fireRate) return;
+        this.lastFireTime = now;
 
-        if (f.life <= 0) {
-            scene.remove(f.mesh);
-            flames.splice(i, 1);
+        // 砲塔の先端から炎のパーティクルを生成
+        const fireParticle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2),
+            new THREE.MeshBasicMaterial({ color: 0xff4500, transparent: true, opacity: 0.8 })
+        );
+
+        // 砲塔の向きに合わせて初速と位置を設定
+        const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(turret.quaternion);
+        fireParticle.position.copy(turret.position).add(direction.clone().multiplyScalar(2));
+        
+        // わずかにランダムな広がり（扇形）を追加
+        direction.x += (Math.random() - 0.5) * 0.2;
+        direction.y += (Math.random() - 0.5) * 0.2;
+
+        this.scene.add(fireParticle);
+
+        // 物理演算（Matter.js等）での判定用ボディ生成
+        const body = Matter.Bodies.circle(fireParticle.position.x, fireParticle.position.z, 0.5, {
+            isSensor: true, // 障害物をすり抜けるが判定は持つ設定
+            label: "flame"
+        });
+        Matter.Body.setVelocity(body, { x: direction.x * 5, y: direction.z * 5 });
+        Matter.World.add(this.world, body);
+
+        // 一定時間で消滅（射程制限）
+        setTimeout(() => {
+            this.scene.remove(fireParticle);
+            Matter.World.remove(this.world, body);
+        }, 600);
+    }
+}
+
+// --- メインループ内 ---
+function animate() {
+    requestAnimationFrame(animate);
+
+    // 戦車の移動入力処理
+    handleTankMovement();
+
+    // カメラを戦車に追従させる
+    updateCamera();
+
+    // セカンダリ武装 [Qキー] の判定
+    if (keys['q'] || isMobileQButtonPressed) {
+        if (currentSecondary === 'Flamethrower') {
+            flamethrower.fire(turret);
         }
     }
 
-    // ★カメラ追従：向きを戦車の方向に完全に合わせる
-    const offset = new THREE.Vector3(0, 4, -10); // 少し引いて視野を確保
-    offset.applyQuaternion(tankGroup.quaternion);
-    const targetCamPos = tankGroup.position.clone().add(offset);
-    
-    camera.position.lerp(targetCamPos, 0.1);
-    
-    // カメラの注視点を「戦車の5メートル前方」に設定
-    const lookAtOffset = new THREE.Vector3(0, 1, 5);
-    lookAtOffset.applyQuaternion(tankGroup.quaternion);
-    const targetLookAt = tankGroup.position.clone().add(lookAtOffset);
-    
-    camera.lookAt(targetLookAt);
-
     renderer.render(scene, camera);
 }
-
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-animate();
-</script>
-</body>
-</html>
